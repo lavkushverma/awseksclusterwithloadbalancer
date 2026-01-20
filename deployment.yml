@@ -1,0 +1,36 @@
+# PART 1: The Deployment (Runs the App)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 2               # Runs 2 copies for high availability
+  selector:
+    matchLabels:
+      app: nginx-app
+  template:
+    metadata:
+      labels:
+        app: nginx-app
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+
+---
+
+# PART 2: The Service (Exposes App to Internet)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  type: LoadBalancer        # CRITICAL: This tells AWS to create an ELB
+  selector:
+    app: nginx-app          # Connects to the deployment above
+  ports:
+    - protocol: TCP
+      port: 80              # Port exposed to the world
+      targetPort: 80        # Port inside the container

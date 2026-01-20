@@ -1,0 +1,134 @@
+EKS Cluster creation
+
+install aws cli
+iam-> create new user->create access key
+launch ec2 instance(bastion host)
+aws configure
+install kubctl
+install eksctl
+create cluster
+kubctl get nodes
+write yml file
+kubctl apply -<yml file>
+kubctl get svc
+
+
+
+
+
+create cluster
+create iam role -->eks cluster --AmazoneEKSClusterPolicy
+create vpc
+create sg  
+
+create node group
+create nodegroup iam role
+--ec2containerregistry
+--ekscnipolicy
+--eksworkernodepolicy
+nodegroup configuration
+create ec2 instance
+--keypair
+--attach created vpc
+--use created sg
+install awscli
+install kubctl-script.sh
+
+#!/bin/bash
+
+# Update package list
+sudo yum update -y
+
+# Download the latest release of kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+
+# Make the kubectl binary executable
+chmod +x ./kubectl
+
+# Move the kubectl binary to a directory in your PATH
+sudo mv ./kubectl /usr/local/bin
+
+# Verify the installation
+kubectl version --client
+
+echo "kubectl installation completed."
+
+-----------------------------------------------------
+
+sudo chmod 777 kubctl-script.sh
+
+aws configure
+--create iam user 
+--create accesskey
+
+aws eks --region ap-south-1 update-kubeconfig --name cluster_anme_of _your
+
+kubctl get nodes
+kubctl get nodes -o wide
+
+[root@ip-10-0-0-146 ~]# kubectl get all
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   172.20.0.1   <none>        443/TCP   22m
+
+
+
+
+
+
+
+vim deployment.yml
+
+apiVersion: apps/v1          # String
+kind: Deployment             # String
+metadata:                    # Parent
+  name: my-deployment-np     # Child (2 spaces indent)
+spec:                        # Parent
+  replicas: 3                # Child
+  selector:                  # Child
+    matchLabels:             # Grandchild (4 spaces indent)
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:            # This is a LIST (Array)
+      - name: my-container   # Item 1 (Starts with a dash -)
+        image: nginx         # Property of Item 1
+        ports:
+        - containerPort: 80  # List inside a list
+
+
+
+
+
+
+
+
+
+[root@ip-10-0-0-146 ~]# ls
+aws  awscliv2.zip  deployment.yml  pod.yml  script.sh
+
+[root@ip-10-0-0-146 ~]# kubectl apply -f deployment.yml
+deployment.apps/my-deployment-np created
+service/my-app-np created
+
+[root@ip-10-0-0-146 ~]# kubectl get deployments
+NAME               READY   UP-TO-DATE   AVAILABLE   AGE
+my-deployment-np   3/3     3            3           14s
+
+[root@ip-10-0-0-146 ~]# kubectl get svc
+NAME             TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+kubernetes       ClusterIP   172.20.0.1       <none>        443/TCP        23m
+my-app-np        NodePort    172.20.186.237   <none>        80:30109/TCP   29s
+
+[root@ip-10-0-0-146 ~]# kubectl get nodes -o wide
+NAME                                            STATUS   ROLES    AGE   VERSION               INTERNAL-IP   EXTERNAL-IP      OS-IMAGE         KERNEL-VERSION                        CONTAINER-RUNTIME
+ip-10-0-0-27.ap-south-1.compute.internal        Ready    <none>   13m   v1.30.0-eks-036c24b   10.0.0.27     13.233.225.82    Amazon Linux 2   5.10.219-208.866.amzn2.x86_64         containerd://1.7.11
+ip-10-0-1-230.ap-south-1.compute.internal       Ready    <none>   14m   v1.30.0-eks-036c24b   10.0.1.230    3.110.167.100    Amazon Linux 2   5.10.219-208.866.amzn2.x86_64         containerd://1.7.11
+[root@ip-10-0-0-146 ~]#
+
+Application Port: The service my-app-np is running on NodePort 30109.
+External IP: The highlighted external IP address is 13.233.225.82.
+Access URL: To access this application from a browser, you would likely combine the External IP and the NodePort:
+http://13.233.225.82:30109

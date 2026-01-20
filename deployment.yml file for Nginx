@@ -1,0 +1,42 @@
+deployment.yml file for Nginx
+
+You can copy this directly into your file.
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment      # Name of the deployment
+spec:
+  replicas: 2                 # Runs 2 copies (pods) of the website
+  selector:
+    matchLabels:
+      app: nginx-app          # Looks for pods with this label
+  template:
+    metadata:
+      labels:
+        app: nginx-app        # Labels the pods so the deployment finds them
+    spec:
+      containers:
+      - name: nginx-container
+        image: nginx:latest   # Downloads the official Nginx image
+        ports:
+        - containerPort: 80
+
+
+ How to use this in Git Bash:
+
+1.  **Create the file:**
+    ```bash
+    nano deployment.yml
+    ```
+2.  **Paste the code:** (Right-click inside the window to paste).
+3.  **Save & Exit:** Press `Ctrl+O`, `Enter`, then `Ctrl+X`.
+4.  **Run it:**
+    ```bash
+    kubectl apply -f deployment.yml
+    ```
+5.  **Check it:**
+    ```bash
+    kubectl get deployments
+    ```
