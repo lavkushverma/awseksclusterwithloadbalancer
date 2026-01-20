@@ -16,3 +16,4 @@ sudo mv ./kubectl /usr/local/bin
 kubectl version --client
 
 echo "kubectl installation completed."
+
