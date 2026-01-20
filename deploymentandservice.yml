@@ -34,3 +34,4 @@ spec:
     - protocol: TCP
       port: 80              # Port exposed to the world
       targetPort: 80        # Port inside the container
+
