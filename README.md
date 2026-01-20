@@ -79,6 +79,8 @@ The setup creates the following infrastructure:
 
 ### Phase 1: IAM Role Configuration
 
+Before creating any resources, we must create IAM Roles for different components:
+
 #### 1.1 Create EKS Cluster Role
 
 1. Navigate to **IAM Console** → **Roles** → **Create Role**
@@ -97,6 +99,8 @@ The setup creates the following infrastructure:
    - `AmazonEKS_CNI_Policy`
 4. **Role Name:** `my-eks-nodegroup-role`
 5. Click **Create Role**
+
+📝 **Note:** The EC2 management server role will be created in Phase 4.
 
 ---
 
@@ -145,25 +149,56 @@ The setup creates the following infrastructure:
 
 While the cluster is being created, set up your management server:
 
-#### 4.1 Launch EC2 Instance
+#### 4.1 Create IAM Role for EC2 (SSM Access)
+
+1. Navigate to **IAM Console** → **Roles** → **Create Role**
+2. **Trusted Entity:** AWS Service → **EC2**
+3. **Permissions:** Attach the following policies:
+   - `AmazonSSMManagedInstanceCore` (for Systems Manager access)
+   - `AdministratorAccess` (for EKS cluster management)
+4. **Role Name:** `eks-admin-ec2-role`
+5. Click **Create Role**
+
+💡 **Note:** The `AmazonSSMManagedInstanceCore` policy allows you to connect to the instance via AWS Systems Manager (SSM) Session Manager without needing SSH keys.
+
+#### 4.2 Launch EC2 Instance
 
 1. Navigate to **EC2 Console** → **Launch Instance**
 2. **Configuration:**
    - **Name:** `eks-admin-server`
    - **OS:** Amazon Linux 2023
    - **Instance Type:** t2.micro
-   - **Key Pair:** Select existing or create new
+   - **Key Pair:** Select existing or create new (optional if using SSM)
 3. **Network Settings:**
    - **VPC:** Same VPC as EKS Cluster
    - **Security Group:** `eks-cluster-sg`
    - **Auto-assign Public IP:** Enable
-4. Click **Launch Instance**
+4. **Advanced Details:**
+   - **IAM Instance Profile:** Select `eks-admin-ec2-role`
+5. Click **Launch Instance**
 
-#### 4.2 Connect to Instance
+⏱️ **Wait Time:** 2-3 minutes for instance to initialize
+
+#### 4.3 Connect to Instance
+
+You can connect using either SSH or AWS Systems Manager:
+
+**Option 1: Connect via SSM (Recommended - No SSH Keys Required)**
+
+1. Navigate to **EC2 Console** → Select `eks-admin-server`
+2. Click **Connect** → **Session Manager** → **Connect**
+
+**Option 2: Connect via SSH**
 
 ```bash
 ssh -i "your-key.pem" ec2-user@<public-ip>
 ```
+
+✅ **Benefits of SSM:**
+- No need to manage SSH keys
+- No need to open port 22 in security groups
+- Session logging and audit trail
+- Works even without public IP (via VPC endpoints)
 
 ---
 
@@ -229,21 +264,30 @@ sudo chmod 777 install-kubectl.sh
 ./install-kubectl.sh
 ```
 
-#### 5.3 Configure AWS Credentials
+#### 5.3 Verify AWS Configuration
 
-1. Create IAM User with **AdministratorAccess**
-2. Generate **Access Keys** from Security Credentials tab
-3. Configure AWS CLI:
+The EC2 instance uses the attached IAM role (`eks-admin-ec2-role`) for AWS authentication, so no manual credential configuration is needed.
+
+Verify your AWS identity:
 
 ```bash
-aws configure
+aws sts get-caller-identity
 ```
 
-Provide the following:
-- **Access Key ID:** `<your-access-key>`
-- **Secret Access Key:** `<your-secret-key>`
-- **Region:** `ap-south-1` (or your cluster region)
-- **Output format:** `json`
+Expected output:
+```json
+{
+    "UserId": "AIDA...",
+    "Account": "123456789012",
+    "Arn": "arn:aws:sts::123456789012:assumed-role/eks-admin-ec2-role/..."
+}
+```
+
+Set your default region (if needed):
+
+```bash
+aws configure set region ap-south-1
+```
 
 ---
 
@@ -372,7 +416,10 @@ To avoid AWS charges, delete resources in reverse order:
 
 4. **Delete Security Group and VPC** (if no longer needed)
 
-5. **Delete IAM Roles** (if no longer needed)
+5. **Delete IAM Roles** (if no longer needed):
+   - `my-eks-cluster-role`
+   - `my-eks-nodegroup-role`
+   - `eks-admin-ec2-role`
 
 ---
 
