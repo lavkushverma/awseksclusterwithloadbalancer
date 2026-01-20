@@ -7,6 +7,7 @@ A comprehensive, step-by-step guide for deploying a production-ready Amazon EKS 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
 - [Architecture](#architecture)
+- [Repository Structure](#repository-structure)
 - [Setup Instructions](#setup-instructions)
   - [Phase 1: IAM Role Configuration](#phase-1-iam-role-configuration)
   - [Phase 2: Network Setup](#phase-2-network-setup-vpc--sg)
@@ -73,6 +74,21 @@ The setup creates the following infrastructure:
 │         │              │  Node 1  │        │ Node 2  │  │
 │         │              └──────────┘        └─────────┘  │
 └─────────┴──────────────────────────────────────────────┘
+```
+
+## 📁 Repository Structure
+
+```
+aws-eks-cluster-setup/
+│
+├── README.md                          # Main documentation
+├── k8s-manifests/                     # Kubernetes manifests
+│   ├── nginx-deployment.yaml          # Sample nginx deployment
+│   └── nginx-service.yaml             # LoadBalancer service
+│
+└── scripts/                           # Installation scripts (optional)
+    ├── install-aws.sh                 # AWS CLI installation
+    └── install-kubectl.sh             # kubectl installation
 ```
 
 ## 🚀 Setup Instructions
@@ -349,21 +365,245 @@ ip-xxx-xxx-xxx-xxx.ap-south-1.compute.internal Ready    <none>   5m    v1.xx.x
 
 ### Deploy a Sample Application
 
-Test your cluster with a simple nginx deployment:
+Now that your cluster is ready, let's deploy a sample nginx application to verify everything works correctly.
+
+#### Step 1: Create Nginx Deployment
+
+**Option A: Use the provided YAML file from this repository**
 
 ```bash
-kubectl create deployment nginx --image=nginx
-kubectl expose deployment nginx --port=80 --type=LoadBalancer
-kubectl get services
+# Clone this repository (if you haven't already)
+git clone <your-repo-url>
+cd aws-eks-cluster-setup
+
+# Apply the deployment
+kubectl apply -f k8s-manifests/nginx-deployment.yaml
 ```
 
-### Verify Deployment
+**Option B: Create the YAML file manually**
+
+Create a deployment file:
 
 ```bash
-kubectl get pods
+nano nginx-deployment.yaml
+```
+
+Add the following content:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+```
+
+Deploy the application:
+
+```bash
+kubectl apply -f nginx-deployment.yaml
+```
+
+#### Step 2: Create LoadBalancer Service
+
+**Option A: Use the provided YAML file from this repository**
+
+```bash
+kubectl apply -f k8s-manifests/nginx-service.yaml
+```
+
+**Option B: Create the YAML file manually**
+
+Create a service file:
+
+```bash
+nano nginx-service.yaml
+```
+
+Add the following content:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  labels:
+    app: nginx
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+```
+
+Deploy the service:
+
+```bash
+kubectl apply -f nginx-service.yaml
+```
+
+⏱️ **Wait Time:** 2-3 minutes for AWS to provision the LoadBalancer (ELB)
+
+#### Step 3: Verify Deployment
+
+Check deployment status:
+
+```bash
+# View deployments
 kubectl get deployments
+
+# View pods
+kubectl get pods
+
+# View services
 kubectl get services
 ```
+
+Expected output for services:
+```
+NAME            TYPE           CLUSTER-IP      EXTERNAL-IP                                                              PORT(S)        AGE
+kubernetes      ClusterIP      10.100.0.1      <none>                                                                   443/TCP        30m
+nginx-service   LoadBalancer   10.100.50.123   a1234567890abcdef.us-east-1.elb.amazonaws.com                          80:31234/TCP   2m
+```
+
+#### Step 4: Access the Application
+
+Get the LoadBalancer URL:
+
+```bash
+kubectl get service nginx-service -o wide
+```
+
+Or get just the URL:
+
+```bash
+kubectl get service nginx-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+Copy the `EXTERNAL-IP` (LoadBalancer DNS name) and paste it in your browser. You should see the nginx welcome page!
+
+#### Step 5: Verify Pod Distribution
+
+Check which nodes the pods are running on:
+
+```bash
+kubectl get pods -o wide
+```
+
+Expected output:
+```
+NAME                                READY   STATUS    RESTARTS   AGE   IP            NODE
+nginx-deployment-xxxxx-yyyyy        1/1     Running   0          5m    10.0.1.10     ip-10-0-1-100.ec2.internal
+nginx-deployment-xxxxx-zzzzz        1/1     Running   0          5m    10.0.2.15     ip-10-0-2-150.ec2.internal
+nginx-deployment-xxxxx-aaaaa        1/1     Running   0          5m    10.0.1.20     ip-10-0-1-100.ec2.internal
+```
+
+#### Step 6: Test Load Balancing
+
+Test the LoadBalancer with multiple requests:
+
+```bash
+# Get the LoadBalancer URL
+LB_URL=$(kubectl get service nginx-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+# Send multiple requests
+for i in {1..10}; do
+  curl -s http://$LB_URL | grep -i "welcome to nginx"
+done
+```
+
+#### Alternative: Quick Deployment Commands
+
+If you prefer quick commands without YAML files:
+
+```bash
+# Create deployment
+kubectl create deployment nginx --image=nginx --replicas=3
+
+# Expose as LoadBalancer
+kubectl expose deployment nginx --port=80 --type=LoadBalancer --name=nginx-service
+
+# Check status
+kubectl get all
+```
+
+### Scaling the Deployment
+
+Scale your nginx deployment up or down:
+
+```bash
+# Scale up to 5 replicas
+kubectl scale deployment nginx-deployment --replicas=5
+
+# Scale down to 2 replicas
+kubectl scale deployment nginx-deployment --replicas=2
+
+# Check scaling status
+kubectl get deployment nginx-deployment
+```
+
+### View Application Logs
+
+```bash
+# Get pod names
+kubectl get pods
+
+# View logs from a specific pod
+kubectl logs <pod-name>
+
+# Stream logs
+kubectl logs -f <pod-name>
+
+# View logs from all nginx pods
+kubectl logs -l app=nginx
+```
+
+### Clean Up Sample Application
+
+When done testing, remove the nginx deployment:
+
+```bash
+# Delete service (this removes the LoadBalancer)
+kubectl delete service nginx-service
+
+# Delete deployment
+kubectl delete deployment nginx-deployment
+
+# Or delete using YAML files
+kubectl delete -f nginx-service.yaml
+kubectl delete -f nginx-deployment.yaml
+
+# Verify deletion
+kubectl get all
+```
+
+⚠️ **Important:** Always delete the LoadBalancer service to avoid AWS charges for the ELB!
 
 ---
 
@@ -389,6 +629,58 @@ aws sts get-caller-identity
 aws eks --region <region> update-kubeconfig --name <cluster-name>
 ```
 
+### LoadBalancer Stuck in Pending State
+
+```bash
+# Check service events
+kubectl describe service nginx-service
+
+# Common causes:
+# 1. Insufficient permissions - Check IAM roles
+# 2. Subnet configuration - Ensure public subnets are tagged correctly
+# 3. VPC configuration - Verify internet gateway and route tables
+
+# Check AWS Load Balancer Controller logs
+kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+```
+
+### Pods Not Starting
+
+```bash
+# Check pod status
+kubectl get pods
+
+# Describe pod for details
+kubectl describe pod <pod-name>
+
+# Check pod logs
+kubectl logs <pod-name>
+
+# Common issues:
+# - Image pull errors: Check ECR permissions
+# - Resource constraints: Check node capacity
+# - Configuration errors: Verify YAML syntax
+```
+
+### Cannot Access Application via LoadBalancer
+
+```bash
+# Verify LoadBalancer is created
+kubectl get svc nginx-service
+
+# Check LoadBalancer in AWS Console
+# EC2 → Load Balancers
+
+# Verify target group health
+# Check security group rules allow traffic on port 80
+
+# Test from EC2 instance
+curl <loadbalancer-dns>
+
+# Check pod endpoints
+kubectl get endpoints nginx-service
+```
+
 ### Permission Issues
 
 Ensure your IAM user/role has the necessary EKS permissions and the aws-auth ConfigMap is properly configured.
@@ -399,27 +691,35 @@ Ensure your IAM user/role has the necessary EKS permissions and the aws-auth Con
 
 To avoid AWS charges, delete resources in reverse order:
 
-1. **Delete Node Group:**
+1. **Delete Sample Application (if still running):**
+   ```bash
+   kubectl delete service nginx-service
+   kubectl delete deployment nginx-deployment
+   ```
+
+2. **Delete Node Group:**
    ```bash
    # Via Console: EKS → Cluster → Compute → Delete Node Group
    ```
 
-2. **Delete EKS Cluster:**
+3. **Delete EKS Cluster:**
    ```bash
    # Via Console: EKS → Delete Cluster
    ```
 
-3. **Terminate EC2 Instance:**
+4. **Terminate EC2 Instance:**
    ```bash
    # Via Console: EC2 → Terminate Instance
    ```
 
-4. **Delete Security Group and VPC** (if no longer needed)
+5. **Delete Security Group and VPC** (if no longer needed)
 
-5. **Delete IAM Roles** (if no longer needed):
+6. **Delete IAM Roles** (if no longer needed):
    - `my-eks-cluster-role`
    - `my-eks-nodegroup-role`
    - `eks-admin-ec2-role`
+
+⚠️ **Critical:** Ensure all LoadBalancer services are deleted before removing the cluster to avoid orphaned AWS ELBs that continue to incur charges!
 
 ---
 
